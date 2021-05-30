@@ -1,3 +1,17 @@
+#!/usr/bin/env python3
+
+import argparse
+
+parser = argparse.ArgumentParser("Record camera, IMU, GPS, attitude.")
+parser.add_argument("-i", action='store_true', help="Use initial exposure estimate for indoor lighting.")
+parser.add_argument("--no-video", action='store_true', help="Disable video recording.")
+parser.add_argument("--no-imu", action='store_true', help="Disable IMU recording.")
+parser.add_argument("--codec", type=str, default="H264", help="The desired video writer codec. Default: 'H264'")
+parser.add_argument("--videodev", type=int, default=0, help="video device number")
+parser.add_argument("--serialdev", default="/dev/serial0", help="mavlink serial device")
+args = parser.parse_args()
+
+
 from pymavlink import mavutil
 import csv
 import time, datetime
@@ -7,7 +21,6 @@ import cv2
 import numpy as np
 import queue
 from dataclasses import dataclass
-import argparse
 
 @dataclass
 class FrameData:
@@ -91,7 +104,7 @@ def write_from_buffer(t0, vio_cap_dir):
 def record_cam(t0, indoor_lighting = True): 
     global write_buffer
 
-    cap = cv2.VideoCapture(0)
+    cap = cv2.VideoCapture(args.videodev)
     cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25) #means manual
 
 
@@ -207,46 +220,38 @@ def request_message_interval(master : mavutil.mavudp, message_id: int, frequency
         0, 0, 0, 0)
 
 
-parser = argparse.ArgumentParser("Record camera, IMU, GPS, attitude.")
-parser.add_argument("-i", action='store_true', help="Use initial exposure estimate for indoor lighting.")
-parser.add_argument("--no_video", action='store_true', help="Disable video recording.")
-parser.add_argument("--codec", type=str, default="H264", help="The desired video writer codec. Default: 'H264'")
-args = parser.parse_args()
-
-
-
 print("Requesting Connection to MAV...")
 # mav_connection = mavutil.mavlink_connection('udpout:raspberrypi.local:14550', )
 
-mav_connection = mavutil.mavlink_connection('/dev/serial0', baud=921600)
-# mavproxy.py --aircraft Qubit --master /dev/serial0 --baudrate 921600 --out=udpin:0.0.0.0:14550
+if not args.no_imu:
+    mav_connection = mavutil.mavlink_connection(args.serialdev, baud=921600)
+    mav_connection.wait_heartbeat()
+    print("Heartbeat from system (system %u component %u)" % (mav_connection.target_system, mav_connection.target_system))
 
-# mav_connection.mav.ping_send(222,0,0,0)
-mav_connection.wait_heartbeat()
-print("Heartbeat from system (system %u component %u)" % (mav_connection.target_system, mav_connection.target_system))
+    print("Requesting 200 Hz IMU")
 
-print("Requesting 200 Hz IMU")
+    # RAW_IMU at 200Hz
+    request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_RAW_IMU, 200.0)
 
-# RAW_IMU at 200Hz
-request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_RAW_IMU, 200.0)
-
-# ATTITUDE and GLOBAL_POSITION_INT at 20Hz
-request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 20.0)
-request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_GPS2_RAW, 20.0)
-request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE, 20.0)
+    # ATTITUDE and GLOBAL_POSITION_INT at 20Hz
+    request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT, 20.0)
+    request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_GPS2_RAW, 20.0)
+    request_message_interval(mav_connection, mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE, 20.0)
 
 
 now = datetime.datetime.now()
-dt = now.strftime("%Y-%m-%d %H-%M-%S")
-vio_cap_dir = "VIO Capture {}".format(dt)
+dt = now.strftime("%Y-%m-%d_%H-%M-%S")
+vio_cap_dir = "VIO_Capture_{}".format(dt)
 os.mkdir(vio_cap_dir)
 
 # Start the IMU and camera threads
 write_buffer = queue.Queue()
 t0 = time.time()
 
-imu_thread = threading.Thread(target=record_imu, args=(t0,))
-imu_thread.start()
+if not args.no_imu:
+    imu_thread = threading.Thread(target=record_imu, args=(t0,))
+    imu_thread.start()
+
 if args.no_video:
     print("Video recording is not active!")
 else:
