@@ -9,6 +9,8 @@ parser.add_argument("--no-imu", action='store_true', help="Disable IMU recording
 parser.add_argument("--codec", type=str, default="H264", help="The desired video writer codec. Default: 'H264'")
 parser.add_argument("--videodev", type=int, default=0, help="video device number")
 parser.add_argument("--serialdev", default="/dev/serial0", help="mavlink serial device")
+parser.add_argument("--verbose", action='store_true', help="show verbode debug")
+parser.add_argument("--delay", type=float, default=0.0, help="delay on camera read")
 args = parser.parse_args()
 
 
@@ -94,14 +96,7 @@ def write_from_buffer(t0, vio_cap_dir):
                 stamp_file.flush()
 
 
-
-
-
-
-
-
-
-def record_cam(t0, indoor_lighting = True): 
+def record_cam(t0, indoor_lighting = True):
     global write_buffer
 
     cap = cv2.VideoCapture(args.videodev)
@@ -119,6 +114,9 @@ def record_cam(t0, indoor_lighting = True):
     ret, frame = cap.read()
 
     frame_count = 0
+    last_frame_count = 0
+    last_t = time.time()
+
     print("Video recording is started.")
     while(True):
         ret, frame = cap.read()
@@ -145,8 +143,15 @@ def record_cam(t0, indoor_lighting = True):
         elif exposure <= 0.0:
             exposure = 1e-6
 
-        time.sleep(0.08)
-            
+        if args.delay > 0:
+            time.sleep(args.delay)
+
+        if args.verbose:
+            t = time.time()
+            if t - last_t > 1.0:
+                print("%.2f FPS" % ((frame_count-last_frame_count)/(t-last_t)))
+                last_t = t
+                last_frame_count = frame_count
 
 
 def record_imu(t0):
