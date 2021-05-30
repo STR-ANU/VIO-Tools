@@ -77,8 +77,11 @@ def write_from_buffer(t0, vio_cap_dir):
 
         flush_counter = 0
         max_flush_count = 200
+        item_count = 0
         while True:
             data_item = write_buffer.get(block=True)
+            print("got frame %u" % (item_count))
+            item_count += 1
              
             if isinstance(data_item, MavData):
                 mav_writer.writerow(data_item.csv_row)
@@ -149,10 +152,15 @@ def record_cam(t0, indoor_lighting = True):
         if args.verbose:
             t = time.time()
             if t - last_t > 1.0:
-                print("%.2f FPS" % ((frame_count-last_frame_count)/(t-last_t)))
+                fps = (frame_count-last_frame_count)/(t-last_t)
+                print("%.2f FPS qsize=%u" % (fps, write_buffer.qsize()))
                 last_t = t
                 last_frame_count = frame_count
 
+        if write_buffer.qsize() > 20:
+            print("Draining queue")
+            while (write_buffer.qsize() > 20):
+                write_buffer.get()
 
 def record_imu(t0):
     global write_buffer
