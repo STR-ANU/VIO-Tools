@@ -85,7 +85,7 @@ def write_from_buffer(t0, vio_cap_dir):
         item_count = 0
         while True:
             data_item = write_buffer.get(block=True)
-            print("got frame %u" % (item_count))
+            # print("got frame %u" % (item_count))
             item_count += 1
              
             if isinstance(data_item, MavData):
@@ -98,7 +98,7 @@ def write_from_buffer(t0, vio_cap_dir):
                         video_writer = cv2.VideoWriter(video_fname, cv2.VideoWriter_fourcc(*args.codec), 20.0, (frame.shape[1],frame.shape[0]))
                     video_writer.write(data_item.image)
                 else:
-                    cv2.imwrite(vio_cap_dir+"/frames/frame_{}.jpg".format(data_item.csv_row[1]), data_item.image)
+                    cv2.imwrite(vio_cap_dir+"/frames/frame_{}.jpg".format(data_item.csv_row[1]), data_item.image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                 stamp_writer.writerow(data_item.csv_row)
             
             flush_counter += 1
