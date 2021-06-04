@@ -11,6 +11,7 @@ parser.add_argument("--videodev", type=int, default=0, help="video device number
 parser.add_argument("--serialdev", default="/dev/serial0", help="mavlink serial device")
 parser.add_argument("--verbose", action='store_true', help="show verbode debug")
 parser.add_argument("--delay", type=float, default=0.0, help="delay on camera read")
+parser.add_argument("--record-video", action='store_true', help="record a video instead of frames")
 args = parser.parse_args()
 
 
@@ -38,7 +39,11 @@ def write_from_buffer(t0, vio_cap_dir):
 
     mav_fname = vio_cap_dir+"/mav_imu.csv"
     stamp_fname = vio_cap_dir+"/cam.csv"
-    video_fname = vio_cap_dir+"/cam.mkv"
+    
+    if args.record_video:
+        video_fname = vio_cap_dir+"/cam.mkv"
+    else:
+        os.mkdir(vio_cap_dir+"/frames")
 
     video_writer = None
     with open(stamp_fname, 'w') as stamp_file, open(mav_fname, 'w') as mav_file:
@@ -86,11 +91,14 @@ def write_from_buffer(t0, vio_cap_dir):
             if isinstance(data_item, MavData):
                 mav_writer.writerow(data_item.csv_row)
             elif isinstance(data_item, FrameData):
-                if video_writer is None:
-                    # Initialise the video writer
-                    frame = data_item.image
-                    video_writer = cv2.VideoWriter(video_fname, cv2.VideoWriter_fourcc(*args.codec), 20.0, (frame.shape[1],frame.shape[0]))
-                video_writer.write(data_item.image)
+                if args.record_video:
+                    if video_writer is None:
+                        # Initialise the video writer
+                        frame = data_item.image
+                        video_writer = cv2.VideoWriter(video_fname, cv2.VideoWriter_fourcc(*args.codec), 20.0, (frame.shape[1],frame.shape[0]))
+                    video_writer.write(data_item.image)
+                else:
+                    cv2.imwrite(vio_cap_dir+"/frames/frame_{}.jpg".format(data_item.csv_row[1]), data_item.image)
                 stamp_writer.writerow(data_item.csv_row)
             
             flush_counter += 1
